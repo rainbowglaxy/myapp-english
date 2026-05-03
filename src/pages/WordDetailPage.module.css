@@ -1,0 +1,175 @@
+.page {
+  padding: 12px 16px 32px;
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topBar button {
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.header {
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.word {
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.phonetics {
+  display: flex;
+  gap: 16px;
+}
+
+.phoneBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.knownBtn {
+  padding: 8px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--green-light);
+  color: var(--green);
+  border-radius: var(--radius-sm);
+}
+
+.unknownBtn {
+  padding: 8px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--red-light);
+  color: var(--red);
+  border-radius: var(--radius-sm);
+}
+
+.recInfo {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.transRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.transRow:last-child {
+  margin-bottom: 0;
+}
+
+.enDef {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.sentence {
+  margin-bottom: 10px;
+}
+
+.sentence:last-child {
+  margin-bottom: 0;
+}
+
+.sentenceCn {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+
+.phraseRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.phraseRow:last-child {
+  margin-bottom: 0;
+}
+
+.phraseContent {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.phraseCn {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.synRow {
+  margin-bottom: 10px;
+}
+
+.synRow:last-child {
+  margin-bottom: 0;
+}
+
+.synTran {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-left: 6px;
+}
+
+.relGroup {
+  margin-bottom: 12px;
+}
+
+.relGroup:last-child {
+  margin-bottom: 0;
+}
+
+.relWord {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
+.relHwd {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.relTran {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
