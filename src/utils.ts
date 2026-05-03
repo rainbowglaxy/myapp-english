@@ -11,15 +11,21 @@ export function uuid(): string {
 
 // 从 JSON 数据导入词书
 export function importWordBookFromData(data: string, bookName?: string): WordBook {
+  // 去除 UTF-8 BOM 头（Windows 保存的文件常见问题）
   const cleaned = data.replace(/^\uFEFF/, '').trim()
 
-const parsed = JSON.parse(data)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cleaned)
+  } catch (e) {
+    throw new Error(`JSON Parse error: ${(e as Error).message}`)
+  }
 
   let entries: WordBookJSON[]
   if (Array.isArray(parsed)) {
-    entries = parsed
+    entries = parsed as WordBookJSON[]
   } else {
-    entries = [parsed]
+    entries = [parsed as WordBookJSON]
   }
 
   if (entries.length === 0) {
