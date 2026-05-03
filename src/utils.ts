@@ -11,7 +11,9 @@ export function uuid(): string {
 
 // 从 JSON 数据导入词书
 export function importWordBookFromData(data: string, bookName?: string): WordBook {
-  const parsed = JSON.parse(data)
+  const cleaned = data.replace(/^\uFEFF/, '').trim()
+
+const parsed = JSON.parse(data)
 
   let entries: WordBookJSON[]
   if (Array.isArray(parsed)) {
