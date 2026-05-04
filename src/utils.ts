@@ -104,42 +104,185 @@ export function importWordBookFromData(data: string, bookName?: string): WordBoo
 // 播放发音
 let currentAudio: HTMLAudioElement | null = null
 
-export function playWordAudio(word: string, accent: 'uk' | 'us' = 'us'): void {
+function stopAudio() {
   if (currentAudio) {
     currentAudio.pause()
+    currentAudio.removeAttribute('src')
+    currentAudio.load()
     currentAudio = null
   }
+}
+
+export function playWordAudio(word: string, accent: 'uk' | 'us' = 'us'): void {
+  stopAudio()
   const type = accent === 'uk' ? 1 : 2
   const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${type}`
   currentAudio = new Audio(url)
-  currentAudio.play().catch(() => {})
+  currentAudio.volume = 1
+  currentAudio.play().catch((err) => {
+    console.error('播放失败:', err)
+  })
 }
 
 export function playSpeech(speechParam: string): void {
-  if (currentAudio) {
-    currentAudio.pause()
-    currentAudio = null
-  }
+  stopAudio()
   const url = `https://dict.youdao.com/dictvoice?${speechParam}`
   currentAudio = new Audio(url)
-  currentAudio.play().catch(() => {})
+  currentAudio.volume = 1
+  currentAudio.play().catch((err) => {
+    console.error('播放失败:', err)
+  })
 }
 
-// 间隔复习算法
-export function nextReviewDate(correctCount: number): string {
-  const intervals = [
-    60 * 10,           // 10分钟
-    60 * 60,           // 1小时
-    60 * 60 * 24,      // 1天
-    60 * 60 * 24 * 3,  // 3天
-    60 * 60 * 24 * 7,  // 7天
-  ]
-  const idx = Math.min(correctCount - 1, intervals.length - 1)
-  const interval = intervals[Math.max(0, idx)]
-  return new Date(Date.now() + interval * 1000).toISOString()
+// ===== 基于 SM-2 的间隔重复算法 =====
+//
+// 状态流转：
+//   new → learning → reviewing → mastered
+//
+// 阶段规则：
+//   new: 首次接触，需连续答对 2 次进入 learning
+//   learning: 短间隔复习（10分钟→30分钟→1小时），连续答对 5 次进入 reviewing
+//   reviewing: 中期间隔（1~7天），连续答对 4 次进入 mastered
+//   mastered: 长期间隔（7~90天），答对间隔递增，答错掉回 reviewing
+//
+// 答错处理：
+//   mastered → reviewing（间隔重置为 1 天）
+//   reviewing → learning（5 分钟后重试）
+//   learning / new → 保持 learning（5 分钟后重试）
+//   任意阶段答错都会降低 easeFactor
+//
+// easeFactor（难度系数）：
+//   初始 2.5，答对 +0.1，答错 -0.3，下限 1.3
+
+const MIN_EASE = 1.3
+const DEFAULT_EASE = 2.5
+
+export interface SRSResult {
+  status: 'new' | 'learning' | 'reviewing' | 'mastered'
+  consecutiveCorrect: number
+  easeFactor: number
+  intervalDays: number
+  nextReviewAt: string
 }
 
-// 5分钟后再复习
-export function fiveMinutesLater(): string {
-  return new Date(Date.now() + 300 * 1000).toISOString()
+export function onCorrect(prev: {
+  status: string
+  consecutiveCorrect: number
+  easeFactor: number
+  intervalDays: number
+}): SRSResult {
+  const consecutive = prev.consecutiveCorrect + 1
+  const ease = Math.max(MIN_EASE, (prev.easeFactor ?? DEFAULT_EASE) + 0.1)
+  const now = Date.now()
+
+  // new → 连续答对 2 次升级为 learning
+  if (prev.status === 'new' || prev.status === 'learning') {
+    if (consecutive >= 2 && prev.status === 'new') {
+      // 升级到 learning，从 10 分钟开始
+      return {
+        status: 'learning',
+        consecutiveCorrect: consecutive,
+        easeFactor: ease,
+        intervalDays: 0,
+        nextReviewAt: new Date(now + 10 * 60 * 1000).toISOString(),
+      }
+    }
+    if (consecutive >= 5 && prev.status === 'learning') {
+      // 升级到 reviewing，从 1 天开始
+      return {
+        status: 'reviewing',
+        consecutiveCorrect: consecutive,
+        easeFactor: ease,
+        intervalDays: 1,
+        nextReviewAt: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+      }
+    }
+    // learning 阶段短间隔递增：10分钟 → 30分钟 → 1小时
+    const learningIntervals = [10, 30, 60] // 分钟
+    const idx = Math.min(consecutive - 1, learningIntervals.length - 1)
+    const minutes = learningIntervals[idx]
+    return {
+      status: prev.status as 'new' | 'learning',
+      consecutiveCorrect: consecutive,
+      easeFactor: ease,
+      intervalDays: 0,
+      nextReviewAt: new Date(now + minutes * 60 * 1000).toISOString(),
+    }
+  }
+
+  // reviewing → 连续答对 4 次升级为 mastered
+  if (prev.status === 'reviewing') {
+    if (consecutive >= 4) {
+      const days = Math.min(90, Math.max(7, Math.round(prev.intervalDays * 1.5)))
+      return {
+        status: 'mastered',
+        consecutiveCorrect: consecutive,
+        easeFactor: ease,
+        intervalDays: days,
+        nextReviewAt: new Date(now + days * 24 * 60 * 60 * 1000).toISOString(),
+      }
+    }
+    // reviewing 阶段间隔递增（上限 7 天）
+    const days = Math.min(7, Math.max(1, Math.round((prev.intervalDays || 1) * ease)))
+    return {
+      status: 'reviewing',
+      consecutiveCorrect: consecutive,
+      easeFactor: ease,
+      intervalDays: days,
+      nextReviewAt: new Date(now + days * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+
+  // mastered → 间隔递增（上限 90 天）
+  {
+    const days = Math.min(90, Math.max(7, Math.round(prev.intervalDays * 1.5)))
+    return {
+      status: 'mastered',
+      consecutiveCorrect: consecutive,
+      easeFactor: ease,
+      intervalDays: days,
+      nextReviewAt: new Date(now + days * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+}
+
+export function onWrong(prev: {
+  status: string
+  consecutiveCorrect: number
+  easeFactor: number
+  intervalDays: number
+}): SRSResult {
+  const ease = Math.max(MIN_EASE, (prev.easeFactor ?? DEFAULT_EASE) - 0.3)
+  const now = Date.now()
+
+  if (prev.status === 'mastered') {
+    // 掉回 reviewing，间隔重置为 1 天
+    return {
+      status: 'reviewing',
+      consecutiveCorrect: 0,
+      easeFactor: ease,
+      intervalDays: 1,
+      nextReviewAt: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+
+  if (prev.status === 'reviewing') {
+    // 掉回 learning，5 分钟后重试
+    return {
+      status: 'learning',
+      consecutiveCorrect: 0,
+      easeFactor: ease,
+      intervalDays: 0,
+      nextReviewAt: new Date(now + 5 * 60 * 1000).toISOString(),
+    }
+  }
+
+  // new / learning → 保持 learning，5 分钟后重试
+  return {
+    status: 'learning',
+    consecutiveCorrect: 0,
+    easeFactor: ease,
+    intervalDays: 0,
+    nextReviewAt: new Date(now + 5 * 60 * 1000).toISOString(),
+  }
 }

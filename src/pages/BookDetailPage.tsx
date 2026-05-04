@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { WordBook, Word, LearningStatus } from '../types'
 import styles from './BookDetailPage.module.css'
 
@@ -16,8 +16,19 @@ type FilterStatus = 'all' | 'new' | 'learning' | 'mastered'
 export default function BookDetailPage({ book, store, onBack, onWordClick, onStartFlashcard, onStartQuiz }: Props) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterStatus>('all')
+  const [shuffle, setShuffle] = useState(false)
   const s = store.stats(book)
   const reviewWords = store.wordsToReview(book)
+
+  const shuffled = useCallback((words: Word[]) => {
+    if (!shuffle) return words
+    const arr = [...words]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
+  }, [shuffle])
 
   const filteredWords = book.words.filter((word) => {
     if (search && !word.headWord.toLowerCase().includes(search.toLowerCase())) return false
@@ -66,13 +77,29 @@ export default function BookDetailPage({ book, store, onBack, onWordClick, onSta
         </div>
       </div>
 
-      <div className={styles.studyBtns}>
-        <button className="btn-primary" onClick={() => onStartFlashcard(reviewWords)} disabled={reviewWords.length === 0}>
-          &#128196; 闪卡记忆
-        </button>
-        <button className="btn-secondary" onClick={() => onStartQuiz(reviewWords)} disabled={reviewWords.length === 0}>
-          &#10003; 选择题测试
-        </button>
+      <div className={styles.studySection}>
+        <div className={styles.orderRow}>
+          <button
+            className={`${styles.orderBtn} ${!shuffle ? styles.orderActive : ''}`}
+            onClick={() => setShuffle(false)}
+          >
+            &#8593;&#8595; 顺序
+          </button>
+          <button
+            className={`${styles.orderBtn} ${shuffle ? styles.orderActive : ''}`}
+            onClick={() => setShuffle(true)}
+          >
+            &#10051; 乱序
+          </button>
+        </div>
+        <div className={styles.studyBtns}>
+          <button className="btn-primary" onClick={() => onStartFlashcard(shuffled(reviewWords))} disabled={reviewWords.length === 0}>
+            &#128196; 闪卡记忆 ({reviewWords.length})
+          </button>
+          <button className="btn-secondary" onClick={() => onStartQuiz(shuffled(reviewWords))} disabled={reviewWords.length === 0}>
+            &#10003; 选择题测试
+          </button>
+        </div>
       </div>
 
       <div className={styles.searchRow}>

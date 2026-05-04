@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { WordBook, Word } from '../types'
 import { playWordAudio } from '../utils'
 import styles from './FlashcardStudyPage.module.css'
@@ -22,6 +22,16 @@ export default function FlashcardStudyPage({ book, words, store, onBack }: Props
 
   const currentWord = currentIndex < words.length ? words[currentIndex] : null
 
+  // 自动播放当前单词发音
+  useEffect(() => {
+    if (currentWord && !finished) {
+      const timer = setTimeout(() => {
+        playWordAudio(currentWord.headWord)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [currentIndex, currentWord, finished])
+
   const handleSwipe = useCallback((known: boolean) => {
     if (!currentWord) return
     setSessionTotal((t) => t + 1)
@@ -30,6 +40,10 @@ export default function FlashcardStudyPage({ book, words, store, onBack }: Props
       store.markKnown(book, currentWord)
     } else {
       store.markUnknown(book, currentWord)
+      // 不认识的词加入复习队列末尾，稍后再推送一次
+      if (currentIndex + 1 < words.length && currentIndex + 1 < 30) {
+        words.push(currentWord)
+      }
     }
 
     const direction = known ? 400 : -400
@@ -44,7 +58,7 @@ export default function FlashcardStudyPage({ book, words, store, onBack }: Props
         setCurrentIndex((i) => i + 1)
       }
     }, 300)
-  }, [currentWord, book, store, currentIndex, words.length])
+  }, [currentWord, book, store, currentIndex, words])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (!isFlipped) return
@@ -97,7 +111,7 @@ export default function FlashcardStudyPage({ book, words, store, onBack }: Props
         <div className={styles.finished}>
           <div className={styles.finishedIcon}>&#11088;</div>
           <h2>本轮学习完成！</h2>
-          <p>共 {sessionTotal} 个单词<br />认识 {sessionCorrect} 个，正确率 {rate}%</p>
+          <p>共复习 {sessionTotal} 次<br />认识 {sessionCorrect} 次，正确率 {rate}%</p>
           <button className="btn-primary" onClick={onBack} style={{ width: '100%' }}>返回</button>
         </div>
       </div>
@@ -117,7 +131,7 @@ export default function FlashcardStudyPage({ book, words, store, onBack }: Props
           <div className="progress-fill" style={{ width: `${(currentIndex / words.length) * 100}%` }} />
         </div>
         <div className={styles.progressInfo}>
-          <span>{currentIndex} / {words.length}</span>
+          <span>{currentIndex + 1} / {words.length}</span>
           <span style={{ color: 'var(--green)', fontWeight: 600 }}>&#10003; {sessionCorrect}</span>
         </div>
       </div>

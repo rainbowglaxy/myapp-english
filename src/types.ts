@@ -139,6 +139,9 @@ export interface LearningRecord {
   status: LearningStatus
   reviewCount: number
   correctCount: number
+  consecutiveCorrect: number  // 连续答对次数
+  easeFactor: number          // 难度系数（SM-2 算法，初始 2.5，最低 1.3）
+  intervalDays: number        // 当前间隔天数
   lastReviewedAt?: string
   nextReviewAt?: string
 }

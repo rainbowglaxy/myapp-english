@@ -76,3 +76,102 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+.planRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.planLabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.planValue {
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.planEdit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planInput {
+  width: 56px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  text-align: center;
+  outline: none;
+}
+
+.planInput:focus {
+  border-color: var(--accent);
+}
+
+.planUnit {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.todayWordList {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.todayWordItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  cursor: pointer;
+}
+
+.todayWordItem:last-child {
+  border-bottom: none;
+}
+
+.todayWordItem:active {
+  background: var(--bg);
+}
+
+.todayWordName {
+  font-size: 15px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.todayWordTrans {
+  font-size: 12px;
+  color: var(--text-secondary);
+}

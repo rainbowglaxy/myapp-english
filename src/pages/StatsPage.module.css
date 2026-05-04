@@ -10,13 +10,96 @@
   margin-bottom: 16px;
 }
 
-.cardList {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+/* 今日学习卡片 */
+.todayCard {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
 }
 
-.cardHeader {
+.todayTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.todayRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.todayItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.todayVal {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.todayLbl {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.todayProgress {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.todayRing {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.todayRingText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.todayWords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+
+.todayWords .badge {
+  cursor: pointer;
+}
+
+.todayMore {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 词书卡片 */
+.bookCard {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.bookHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -56,17 +139,26 @@
   margin-bottom: 12px;
 }
 
-.statCol {
+.statBtn {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  padding: 4px 0;
+  background: none;
+  border: none;
   border-right: 1px solid var(--border);
+  cursor: pointer;
 }
 
-.statCol:last-child {
+.statBtn:last-child {
   border-right: none;
+}
+
+.statBtn:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .statVal {
@@ -84,4 +176,98 @@
   justify-content: space-between;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* 弹窗 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%;
+  max-width: 600px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.modalClose {
+  font-size: 18px;
+  color: var(--text-secondary);
+  padding: 4px;
+}
+
+.modalBody {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modalWord {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  cursor: pointer;
+}
+
+.modalWord:active {
+  background: var(--bg);
+}
+
+.modalWordName {
+  font-size: 15px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.modalWordTrans {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.modalArrow {
+  font-size: 18px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }

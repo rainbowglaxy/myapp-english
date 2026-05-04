@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { WordBook, Word, LearningRecord, BookStats } from './types'
-import { nextReviewDate, fiveMinutesLater } from './utils'
+import { onCorrect, onWrong } from './utils'
 
 const BOOKS_KEY = 'wordBooks_v1'
 const RECORDS_KEY = 'learningRecords_v1'
+const DAILY_LIMIT_KEY = 'dailyLimit_v1'
 
 function loadBooks(): WordBook[] {
   try {
@@ -31,6 +32,15 @@ function saveRecords(records: Record<string, LearningRecord>) {
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records))
 }
 
+function loadDailyLimit(): number {
+  const data = localStorage.getItem(DAILY_LIMIT_KEY)
+  return data ? Number(data) : 20
+}
+
+function saveDailyLimit(limit: number) {
+  localStorage.setItem(DAILY_LIMIT_KEY, String(limit))
+}
+
 export interface StoreState {
   wordBooks: WordBook[]
   learningRecords: Record<string, LearningRecord>
@@ -39,9 +49,15 @@ export interface StoreState {
 export function useStore() {
   const [wordBooks, setWordBooks] = useState<WordBook[]>(loadBooks)
   const [learningRecords, setLearningRecords] = useState<Record<string, LearningRecord>>(loadRecords)
+  const [dailyLimit, setDailyLimitState] = useState<number>(loadDailyLimit)
 
   useEffect(() => { saveBooks(wordBooks) }, [wordBooks])
   useEffect(() => { saveRecords(learningRecords) }, [learningRecords])
+  useEffect(() => { saveDailyLimit(dailyLimit) }, [dailyLimit])
+
+  const setDailyLimit = useCallback((limit: number) => {
+    setDailyLimitState(Math.max(1, Math.min(100, limit)))
+  }, [])
 
   const addWordBook = useCallback((book: WordBook) => {
     setWordBooks((prev) => [...prev, book])
@@ -71,21 +87,31 @@ export function useStore() {
       status: 'new',
       reviewCount: 0,
       correctCount: 0,
+      consecutiveCorrect: 0,
+      easeFactor: 2.5,
+      intervalDays: 0,
     }
   }, [learningRecords, recordKey])
 
   const markKnown = useCallback((book: WordBook, word: Word) => {
     const key = recordKey(book, word)
     const rec = record(book, word)
-    const newCorrect = rec.correctCount + 1
-    const newReview = rec.reviewCount + 1
+    const srs = onCorrect({
+      status: rec.status,
+      consecutiveCorrect: rec.consecutiveCorrect,
+      easeFactor: rec.easeFactor,
+      intervalDays: rec.intervalDays,
+    })
     const updated: LearningRecord = {
       ...rec,
-      reviewCount: newReview,
-      correctCount: newCorrect,
+      reviewCount: rec.reviewCount + 1,
+      correctCount: rec.correctCount + 1,
+      consecutiveCorrect: srs.consecutiveCorrect,
+      easeFactor: srs.easeFactor,
+      intervalDays: srs.intervalDays,
       lastReviewedAt: new Date().toISOString(),
-      status: newCorrect >= 3 ? 'mastered' : 'reviewing',
-      nextReviewAt: nextReviewDate(newCorrect),
+      status: srs.status,
+      nextReviewAt: srs.nextReviewAt,
     }
     setLearningRecords((prev) => ({ ...prev, [key]: updated }))
   }, [recordKey, record])
@@ -93,12 +119,21 @@ export function useStore() {
   const markUnknown = useCallback((book: WordBook, word: Word) => {
     const key = recordKey(book, word)
     const rec = record(book, word)
+    const srs = onWrong({
+      status: rec.status,
+      consecutiveCorrect: rec.consecutiveCorrect,
+      easeFactor: rec.easeFactor,
+      intervalDays: rec.intervalDays,
+    })
     const updated: LearningRecord = {
       ...rec,
       reviewCount: rec.reviewCount + 1,
+      consecutiveCorrect: srs.consecutiveCorrect,
+      easeFactor: srs.easeFactor,
+      intervalDays: srs.intervalDays,
       lastReviewedAt: new Date().toISOString(),
-      status: 'learning',
-      nextReviewAt: fiveMinutesLater(),
+      status: srs.status,
+      nextReviewAt: srs.nextReviewAt,
     }
     setLearningRecords((prev) => ({ ...prev, [key]: updated }))
   }, [recordKey, record])
@@ -130,15 +165,16 @@ export function useStore() {
     }
   }, [learningRecords, recordKey])
 
-  const wordsToReview = useCallback((book: WordBook, limit = 20): Word[] => {
+  const wordsToReview = useCallback((book: WordBook, limit?: number): Word[] => {
+    const max = limit ?? dailyLimit
     const now = new Date().toISOString()
     const result: Word[] = []
     for (const word of book.words) {
-      if (result.length >= limit) break
+      if (result.length >= max) break
       const key = recordKey(book, word)
       const rec = learningRecords[key]
       if (!rec) {
-        result.push(word) // 新词
+        result.push(word)
       } else if (rec.status === 'mastered') {
         continue
       } else if (rec.nextReviewAt && rec.nextReviewAt <= now) {
@@ -146,18 +182,54 @@ export function useStore() {
       }
     }
     return result
-  }, [learningRecords, recordKey])
+  }, [learningRecords, recordKey, dailyLimit])
+
+  // 获取今日已学习的单词
+  const getTodayWords = useCallback((): { book: WordBook; word: Word; record: LearningRecord }[] => {
+    const today = new Date().toISOString().slice(0, 10)
+    const result: { book: WordBook; word: Word; record: LearningRecord }[] = []
+    for (const book of wordBooks) {
+      for (const word of book.words) {
+        const key = `${book.bookId}_${word.wordId}`
+        const rec = learningRecords[key]
+        if (rec && rec.lastReviewedAt && rec.lastReviewedAt.slice(0, 10) === today) {
+          result.push({ book, word, record: rec })
+        }
+      }
+    }
+    return result
+  }, [wordBooks, learningRecords])
+
+  // 获取某本书中指定状态的单词
+  const getWordsByStatus = useCallback((book: WordBook, status: 'new' | 'learning' | 'reviewing' | 'mastered'): Word[] => {
+    return book.words.filter((word) => {
+      const key = `${book.bookId}_${word.wordId}`
+      const rec = learningRecords[key]
+      if (status === 'new') return !rec || rec.status === 'new'
+      return rec?.status === status
+    })
+  }, [learningRecords])
+
+  const todayStats = useCallback(() => {
+    const todayWords = getTodayWords()
+    return { reviewed: todayWords.length }
+  }, [getTodayWords])
 
   return {
     wordBooks,
     learningRecords,
+    dailyLimit,
     addWordBook,
     deleteWordBook,
+    setDailyLimit,
     recordKey,
     record,
     markKnown,
     markUnknown,
     stats,
     wordsToReview,
+    getTodayWords,
+    getWordsByStatus,
+    todayStats,
   }
 }

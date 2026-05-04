@@ -18,6 +18,17 @@
   color: var(--accent);
 }
 
+.topCenter {
+  flex: 1;
+  text-align: center;
+}
+
+.navInfo {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 .header {
   background: var(--bg);
   border-radius: var(--radius-lg);
@@ -32,6 +43,14 @@
 .word {
   font-size: 36px;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.playIcon {
+  font-size: 20px;
+  margin-left: 8px;
+  opacity: 0.4;
+  vertical-align: middle;
 }
 
 .phonetics {
@@ -172,4 +191,25 @@
 .relTran {
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.navRow {
+  display: flex;
+  gap: 10px;
+}
+
+.navBtn {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+  color: var(--accent);
+  text-align: center;
+}
+
+.navBtn:disabled {
+  opacity: 0.3;
 }

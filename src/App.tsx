@@ -13,7 +13,7 @@ type Tab = 'books' | 'today' | 'stats'
 type Page =
   | { type: 'tab' }
   | { type: 'bookDetail'; book: WordBook }
-  | { type: 'wordDetail'; word: Word; book: WordBook }
+  | { type: 'wordDetail'; word: Word; book: WordBook; words?: Word[] }
   | { type: 'flashcard'; book: WordBook; words: Word[] }
   | { type: 'quiz'; book: WordBook; words: Word[] }
 
@@ -24,13 +24,38 @@ function App() {
 
   const goBack = () => setPage({ type: 'tab' })
 
+  const openWordDetail = (word: Word, book: WordBook, words?: Word[]) => {
+    setPage({ type: 'wordDetail', word, book, words })
+  }
+
+  const nextWord = page.type === 'wordDetail' && page.words
+    ? () => {
+        const idx = page.words!.indexOf(page.word)
+        if (idx >= 0 && idx + 1 < page.words!.length) {
+          setPage({ ...page, word: page.words![idx + 1] })
+        } else {
+          goBack()
+        }
+      }
+    : undefined
+
+  const prevWord = page.type === 'wordDetail' && page.words
+    ? () => {
+        const idx = page.words!.indexOf(page.word)
+        if (idx > 0) {
+          setPage({ ...page, word: page.words![idx - 1] })
+        }
+      }
+    : undefined
+
   if (page.type === 'bookDetail') {
+    const reviewWords = store.wordsToReview(page.book)
     return (
       <BookDetailPage
         book={page.book}
         store={store}
         onBack={goBack}
-        onWordClick={(word) => setPage({ type: 'wordDetail', word, book: page.book })}
+        onWordClick={(word) => openWordDetail(word, page.book, reviewWords)}
         onStartFlashcard={(words) => setPage({ type: 'flashcard', book: page.book, words })}
         onStartQuiz={(words) => setPage({ type: 'quiz', book: page.book, words })}
       />
@@ -38,7 +63,19 @@ function App() {
   }
 
   if (page.type === 'wordDetail') {
-    return <WordDetailPage word={page.word} book={page.book} store={store} onBack={goBack} />
+    return (
+      <WordDetailPage
+        word={page.word}
+        book={page.book}
+        store={store}
+        onBack={goBack}
+        onNext={nextWord}
+        onPrev={prevWord}
+        hasNav={!!page.words}
+        currentIdx={page.words ? page.words.indexOf(page.word) + 1 : undefined}
+        totalWords={page.words?.length}
+      />
+    )
   }
 
   if (page.type === 'flashcard') {
@@ -62,9 +99,18 @@ function App() {
           <TodayPage
             store={store}
             onStudy={(book, words) => setPage({ type: 'flashcard', book, words })}
+            onWordClick={(word, book) => {
+              const dueWords = store.wordsToReview(book)
+              openWordDetail(word, book, dueWords)
+            }}
           />
         )}
-        {tab === 'stats' && <StatsPage store={store} />}
+        {tab === 'stats' && (
+          <StatsPage
+            store={store}
+            onWordClick={(word, book) => openWordDetail(word, book)}
+          />
+        )}
       </div>
       <nav className="tab-bar">
         <button className={tab === 'books' ? 'active' : ''} onClick={() => setTab('books')}>
