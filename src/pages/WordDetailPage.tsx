@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import type { WordBook, Word } from '../types'
 import { playWordAudio, playSpeech } from '../utils'
 import styles from './WordDetailPage.module.css'
@@ -8,49 +8,26 @@ interface Props {
   book: WordBook
   store: ReturnType<typeof import('../store').useStore>
   onBack: () => void
-  onNext?: () => void
-  onPrev?: () => void
-  hasNav?: boolean
-  currentIdx?: number
-  totalWords?: number
+  onMarkAndNext: (known: boolean) => void
+  onPrev: () => void
+  currentIdx: number
+  totalWords: number
 }
 
-export default function WordDetailPage({ word, book, store, onBack, onNext, onPrev, hasNav, currentIdx, totalWords }: Props) {
-  const [showChinese, setShowChinese] = useState(true)
+export default function WordDetailPage({ word, book, store, onBack, onMarkAndNext, onPrev, currentIdx, totalWords }: Props) {
   const rec = store.record(book, word)
 
   // 自动播放发音
   useEffect(() => {
-    const timer = setTimeout(() => {
-      playWordAudio(word.headWord)
-    }, 200)
-    return () => clearTimeout(timer)
+    playWordAudio(word.headWord)
   }, [word.id])
-
-  const handleKnown = () => {
-    store.markKnown(book, word)
-    if (onNext) onNext()
-  }
-
-  const handleUnknown = () => {
-    store.markUnknown(book, word)
-    if (onNext) onNext()
-  }
 
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
         <button onClick={onBack}>&#8592; 返回</button>
-        <div className={styles.topCenter}>
-          {hasNav && currentIdx && totalWords ? (
-            <span className={styles.navInfo}>{currentIdx} / {totalWords}</span>
-          ) : (
-            <span />
-          )}
-        </div>
-        <button onClick={() => setShowChinese(!showChinese)}>
-          {showChinese ? '&#128065; 隐藏中文' : '&#128065; 显示中文'}
-        </button>
+        <span className={styles.navInfo}>{currentIdx} / {totalWords}</span>
+        <span />
       </div>
 
       <div className={styles.header}>
@@ -76,25 +53,12 @@ export default function WordDetailPage({ word, book, store, onBack, onNext, onPr
         </div>
 
         <div className={styles.actions}>
-          {hasNav ? (
-            <>
-              <button className={styles.unknownBtn} onClick={handleUnknown}>
-                &#128078; 不认识
-              </button>
-              <button className={styles.knownBtn} onClick={handleKnown}>
-                &#128077; 认识
-              </button>
-            </>
-          ) : (
-            <>
-              <button className={styles.unknownBtn} onClick={() => store.markUnknown(book, word)}>
-                &#128078; 不认识
-              </button>
-              <button className={styles.knownBtn} onClick={() => store.markKnown(book, word)}>
-                &#128077; 认识
-              </button>
-            </>
-          )}
+          <button className={styles.unknownBtn} onClick={() => onMarkAndNext(false)}>
+            &#128078; 不认识
+          </button>
+          <button className={styles.knownBtn} onClick={() => onMarkAndNext(true)}>
+            &#128077; 认识
+          </button>
         </div>
 
         <div className={styles.recInfo}>
@@ -102,16 +66,14 @@ export default function WordDetailPage({ word, book, store, onBack, onNext, onPr
         </div>
       </div>
 
-      {hasNav && (
-        <div className={styles.navRow}>
-          <button className={styles.navBtn} onClick={onPrev} disabled={!onPrev || currentIdx === 1}>
-            &#8592; 上一个
-          </button>
-          <button className={styles.navBtn} onClick={onNext}>
-            下一个 &#8594;
-          </button>
-        </div>
-      )}
+      <div className={styles.navRow}>
+        <button className={styles.navBtn} onClick={onPrev} disabled={currentIdx <= 1}>
+          &#8592; 上一个
+        </button>
+        <button className={styles.navBtn} onClick={() => onMarkAndNext(true)}>
+          下一个 &#8594;
+        </button>
+      </div>
 
       {word.translations.length > 0 && (
         <div className="section-card">
@@ -134,7 +96,7 @@ export default function WordDetailPage({ word, book, store, onBack, onNext, onPr
           {word.sentences.map((s, i) => (
             <div key={i} className={styles.sentence}>
               <div dangerouslySetInnerHTML={{ __html: highlightWord(s.sContent, word.headWord) }} />
-              {showChinese && <div className={styles.sentenceCn}>{s.sCn}</div>}
+              <div className={styles.sentenceCn}>{s.sCn}</div>
               {i < word.sentences.length - 1 && <hr className={styles.divider} />}
             </div>
           ))}

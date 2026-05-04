@@ -17,15 +17,6 @@ type Page =
   | { type: 'flashcard'; book: WordBook; words: Word[] }
   | { type: 'quiz'; book: WordBook; words: Word[] }
 
-function shuffleArr<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
 function App() {
   const store = useStore()
   const [tab, setTab] = useState<Tab>('books')
@@ -33,7 +24,6 @@ function App() {
 
   const goBack = () => setPage({ type: 'tab' })
 
-  // 统一的单词详情打开函数，必须传入单词列表
   const openWordDetail = useCallback((word: Word, book: WordBook, words: Word[]) => {
     setPage({ type: 'wordDetail', word, book, words })
   }, [])
@@ -54,26 +44,35 @@ function App() {
 
   if (page.type === 'wordDetail') {
     const idx = page.words.indexOf(page.word)
-    const onNext = () => {
+
+    // 标记认识并跳到下一个
+    const markAndNext = (known: boolean) => {
+      if (known) {
+        store.markKnown(page.book, page.word)
+      } else {
+        store.markUnknown(page.book, page.word)
+      }
       if (idx >= 0 && idx + 1 < page.words.length) {
         setPage({ ...page, word: page.words[idx + 1] })
       } else {
         goBack()
       }
     }
-    const onPrev = () => {
+
+    const goPrev = () => {
       if (idx > 0) {
         setPage({ ...page, word: page.words[idx - 1] })
       }
     }
+
     return (
       <WordDetailPage
         word={page.word}
         book={page.book}
         store={store}
         onBack={goBack}
-        onNext={onNext}
-        onPrev={onPrev}
+        onMarkAndNext={markAndNext}
+        onPrev={goPrev}
         currentIdx={idx + 1}
         totalWords={page.words.length}
       />
