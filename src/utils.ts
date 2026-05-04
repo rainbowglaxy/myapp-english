@@ -9,23 +9,60 @@ export function uuid(): string {
   })
 }
 
-// 从 JSON 数据导入词书
-export function importWordBookFromData(data: string, bookName?: string): WordBook {
-  // 去除 UTF-8 BOM 头（Windows 保存的文件常见问题）
-  const cleaned = data.replace(/^\uFEFF/, '').trim()
+// 把多个拼接的 JSON 对象字符串解析成数组
+// 支持三种格式：
+//   1. 标准数组：[{...},{...}]
+//   2. 单个对象：{...}
+//   3. 拼接对象：{...}{...}{...}
+function parseFlexibleJSON(data: string): WordBookJSON[] {
+  const cleaned = data.replace(/^﻿/, '').trim()
 
-  let parsed: unknown
+  // 先尝试标准 JSON 解析
   try {
-    parsed = JSON.parse(cleaned)
-  } catch (e) {
-    throw new Error(`JSON Parse error: ${(e as Error).message}`)
+    const parsed = JSON.parse(cleaned)
+    return Array.isArray(parsed) ? parsed : [parsed]
+  } catch {
+    // 标准解析失败，尝试拆分拼接的对象
   }
 
+  // 逐字符扫描，按括号深度切割出每个独立 JSON 对象
+  const objects: WordBookJSON[] = []
+  let depth = 0
+  let start = -1
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i]
+    if (ch === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0 && start !== -1) {
+        const chunk = cleaned.slice(start, i + 1)
+        try {
+          objects.push(JSON.parse(chunk))
+        } catch (e) {
+          throw new Error(`第 ${objects.length + 1} 个单词解析失败: ${(e as Error).message}`)
+        }
+        start = -1
+      }
+    }
+  }
+
+  if (objects.length === 0) {
+    throw new Error('未找到有效的 JSON 数据')
+  }
+
+  return objects
+}
+
+// 从 JSON 数据导入词书
+export function importWordBookFromData(data: string, bookName?: string): WordBook {
   let entries: WordBookJSON[]
-  if (Array.isArray(parsed)) {
-    entries = parsed as WordBookJSON[]
-  } else {
-    entries = [parsed as WordBookJSON]
+  try {
+    entries = parseFlexibleJSON(data)
+  } catch (e) {
+    throw new Error(`JSON Parse error: ${(e as Error).message}`)
   }
 
   if (entries.length === 0) {
