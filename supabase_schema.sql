@@ -35,6 +35,7 @@ create table if not exists learning_records (
 -- 用户设置表：每行一个用户
 create table if not exists user_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null default '',
   daily_limit integer not null default 20,
   dark_mode boolean not null default false,
   migrated_from_local boolean not null default false,

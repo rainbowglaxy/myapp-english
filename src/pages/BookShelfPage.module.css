@@ -38,6 +38,107 @@
   color: var(--accent);
 }
 
+/* Settings dropdown */
+.menuWrap {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 150;
+  overflow: hidden;
+}
+
+.dropdownHeader {
+  padding: 12px 14px;
+}
+
+.usernameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.usernameDisplay {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.editBtn {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.editBtn:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.usernameEdit {
+  display: flex;
+  gap: 6px;
+}
+
+.usernameInput {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.usernameInput:focus {
+  border-color: var(--accent);
+}
+
+.usernameSaveBtn {
+  padding: 6px 12px;
+  background: var(--accent);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: var(--border);
+}
+
+.dropdownItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.dropdownItem:hover {
+  background: var(--accent-light);
+}
+
+.dropdownDanger {
+  color: var(--red);
+}
+
+.dropdownDanger:hover {
+  background: var(--red-light);
+  color: var(--red);
+}
+
 /* Search */
 .searchRow {
   position: relative;
@@ -203,6 +304,19 @@
   justify-content: flex-end;
 }
 
+.renameBtn {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.renameBtn:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
 .resetBtn {
   font-size: 12px;
   color: var(--text-tertiary);
@@ -281,4 +395,20 @@
 
 .confirmResetBtn:hover {
   opacity: 0.9;
+}
+
+.renameInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  margin-bottom: 16px;
+}
+
+.renameInput:focus {
+  border-color: var(--accent);
 }

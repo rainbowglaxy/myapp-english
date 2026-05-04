@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { importWordBookFromData } from '../utils'
 import type { WordBook, Word } from '../types'
 import styles from './BookShelfPage.module.css'
@@ -7,15 +7,35 @@ interface Props {
   store: ReturnType<typeof import('../store').useStore>
   onBookClick: (book: WordBook) => void
   onWordClick: (word: Word, book: WordBook) => void
+  onSignOut: () => void
 }
 
-export default function BookShelfPage({ store, onBookClick, onWordClick }: Props) {
+export default function BookShelfPage({ store, onBookClick, onWordClick, onSignOut }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const backupRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [resetBook, setResetBook] = useState<WordBook | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [editUsername, setEditUsername] = useState(false)
+  const [usernameInput, setUsernameInput] = useState(store.username)
+  const [renameBook, setRenameBook] = useState<WordBook | null>(null)
+  const [renameInput, setRenameInput] = useState('')
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const searchResults = store.searchAllWords(search)
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+        setEditUsername(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -46,6 +66,20 @@ export default function BookShelfPage({ store, onBookClick, onWordClick }: Props
     e.target.value = ''
   }
 
+  const handleSaveUsername = () => {
+    const name = usernameInput.trim()
+    if (name) store.updateUsername(name)
+    setEditUsername(false)
+  }
+
+  const handleRenameBook = () => {
+    const name = renameInput.trim()
+    if (name && renameBook) {
+      store.renameWordBook(renameBook, name)
+    }
+    setRenameBook(null)
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -54,12 +88,48 @@ export default function BookShelfPage({ store, onBookClick, onWordClick }: Props
           <button className={styles.iconBtn} onClick={store.toggleDarkMode} title={store.darkMode ? '亮色模式' : '暗色模式'}>
             {store.darkMode ? '&#9728;' : '&#9790;'}
           </button>
-          <button className={styles.iconBtn} onClick={store.exportData} title="导出备份">
-            &#8615;
-          </button>
-          <button className={styles.iconBtn} onClick={() => backupRef.current?.click()} title="导入备份">
-            &#8613;
-          </button>
+          <div className={styles.menuWrap} ref={menuRef}>
+            <button className={styles.iconBtn} onClick={() => setMenuOpen(!menuOpen)} title="设置">
+              &#9881;
+            </button>
+            {menuOpen && (
+              <div className={styles.dropdown}>
+                <div className={styles.dropdownHeader}>
+                  {editUsername ? (
+                    <div className={styles.usernameEdit}>
+                      <input
+                        className={styles.usernameInput}
+                        value={usernameInput}
+                        onChange={(e) => setUsernameInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveUsername()}
+                        autoFocus
+                        maxLength={20}
+                      />
+                      <button className={styles.usernameSaveBtn} onClick={handleSaveUsername}>保存</button>
+                    </div>
+                  ) : (
+                    <div className={styles.usernameRow}>
+                      <span className={styles.usernameDisplay}>{store.username || '未命名用户'}</span>
+                      <button className={styles.editBtn} onClick={() => { setUsernameInput(store.username); setEditUsername(true) }}>
+                        &#9998;
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className={styles.dropdownDivider} />
+                <button className={styles.dropdownItem} onClick={() => { store.exportData(); setMenuOpen(false) }}>
+                  &#8615; 导出备份
+                </button>
+                <button className={styles.dropdownItem} onClick={() => { backupRef.current?.click(); setMenuOpen(false) }}>
+                  &#8613; 导入备份
+                </button>
+                <div className={styles.dropdownDivider} />
+                <button className={`${styles.dropdownItem} ${styles.dropdownDanger}`} onClick={() => { onSignOut(); setMenuOpen(false) }}>
+                  &#128682; 退出登录
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -158,6 +228,13 @@ export default function BookShelfPage({ store, onBookClick, onWordClick }: Props
                       </div>
                       <div className={styles.bookActions}>
                         <button
+                          className={styles.renameBtn}
+                          onClick={(e) => { e.stopPropagation(); setRenameInput(book.name); setRenameBook(book) }}
+                          title="重命名"
+                        >
+                          &#9998; 重命名
+                        </button>
+                        <button
                           className={styles.resetBtn}
                           onClick={(e) => { e.stopPropagation(); setResetBook(book) }}
                           title="重置进度"
@@ -198,6 +275,27 @@ export default function BookShelfPage({ store, onBookClick, onWordClick }: Props
               <button className={styles.confirmResetBtn} onClick={() => { store.resetBookProgress(resetBook); setResetBook(null) }}>
                 确认重置
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 重命名弹窗 */}
+      {renameBook && (
+        <div className={styles.overlay} onClick={() => setRenameBook(null)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalTitle}>重命名词书</div>
+            <input
+              className={styles.renameInput}
+              value={renameInput}
+              onChange={(e) => setRenameInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRenameBook()}
+              autoFocus
+              maxLength={50}
+            />
+            <div className={styles.modalBtns}>
+              <button className="btn-secondary" onClick={() => setRenameBook(null)}>取消</button>
+              <button className="btn-primary" onClick={handleRenameBook}>确认</button>
             </div>
           </div>
         </div>

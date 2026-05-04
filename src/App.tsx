@@ -141,6 +141,7 @@ function App() {
             store={store}
             onBookClick={(book) => setPage({ type: 'bookDetail', book })}
             onWordClick={(word, book) => openWordDetail(word, book, book.words)}
+            onSignOut={signOut}
           />
         )}
         {tab === 'today' && (
@@ -169,10 +170,6 @@ function App() {
         <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>
           <span className="tab-icon">&#128202;</span>
           <span>统计</span>
-        </button>
-        <button onClick={signOut} style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '8px 0 6px' }}>
-          <span className="tab-icon">&#128682;</span>
-          <span>退出</span>
         </button>
       </nav>
     </>

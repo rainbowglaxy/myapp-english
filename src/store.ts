@@ -8,6 +8,7 @@ const BOOKS_KEY = 'wordBooks_v1'
 const RECORDS_KEY = 'learningRecords_v1'
 const DAILY_LIMIT_KEY = 'dailyLimit_v1'
 const DARK_MODE_KEY = 'darkMode_v1'
+const USERNAME_KEY = 'username_v1'
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -32,6 +33,7 @@ export function useStore(userId: string | null = null) {
   const [learningRecords, setLearningRecords] = useState<Record<string, LearningRecord>>(() => load(RECORDS_KEY, {}))
   const [dailyLimit, setDailyLimitState] = useState<number>(() => load(DAILY_LIMIT_KEY, 20))
   const [darkMode, setDarkModeState] = useState<boolean>(() => load(DARK_MODE_KEY, false))
+  const [username, setUsernameState] = useState<string>(() => load(USERNAME_KEY, ''))
   const [hydrated, setHydrated] = useState(!userId) // if no userId, start hydrated (localStorage mode)
   const userIdRef = useRef(userId)
   userIdRef.current = userId
@@ -41,6 +43,7 @@ export function useStore(userId: string | null = null) {
   useEffect(() => { save(RECORDS_KEY, learningRecords) }, [learningRecords])
   useEffect(() => { save(DAILY_LIMIT_KEY, dailyLimit) }, [dailyLimit])
   useEffect(() => { save(DARK_MODE_KEY, darkMode) }, [darkMode])
+  useEffect(() => { save(USERNAME_KEY, username) }, [username])
 
   // 暗色模式
   useEffect(() => {
@@ -60,7 +63,7 @@ export function useStore(userId: string | null = null) {
       // 检查是否需要迁移
       const { data: settings } = await supabase
         .from('user_settings')
-        .select('migrated_from_local, daily_limit, dark_mode')
+        .select('migrated_from_local, daily_limit, dark_mode, username')
         .eq('user_id', userId!)
         .maybeSingle()
 
@@ -122,6 +125,7 @@ export function useStore(userId: string | null = null) {
       if (settings) {
         setDailyLimitState(settings.daily_limit)
         setDarkModeState(settings.dark_mode)
+        if (settings.username) setUsernameState(settings.username)
       }
 
       if (!cancelled) setHydrated(true)
@@ -143,6 +147,27 @@ export function useStore(userId: string | null = null) {
       }
       return next
     })
+  }, [])
+
+  const updateUsername = useCallback((name: string) => {
+    setUsernameState(name)
+    if (userIdRef.current) {
+      supabase.from('user_settings').upsert({
+        user_id: userIdRef.current,
+        username: name,
+      }, { onConflict: 'user_id' }).then()
+    }
+  }, [])
+
+  const renameWordBook = useCallback((book: WordBook, newName: string) => {
+    setWordBooks((prev) => prev.map((b) =>
+      b.id === book.id ? { ...b, name: newName } : b
+    ))
+    if (userIdRef.current) {
+      supabase.from('word_books').update({ name: newName })
+        .eq('user_id', userIdRef.current)
+        .eq('book_id', book.bookId).then()
+    }
   }, [])
 
   const setDailyLimit = useCallback((limit: number) => {
@@ -484,11 +509,14 @@ export function useStore(userId: string | null = null) {
     learningRecords,
     dailyLimit,
     darkMode,
+    username,
     hydrated,
     addWordBook,
     deleteWordBook,
     setDailyLimit,
     toggleDarkMode,
+    updateUsername,
+    renameWordBook,
     recordKey,
     record,
     markKnown,
