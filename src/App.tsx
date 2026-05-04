@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useAuth } from './lib/auth'
 import { useStore } from './store'
 import type { WordBook, Word } from './types'
+import AuthPage from './components/AuthPage'
 import BookShelfPage from './pages/BookShelfPage'
 import BookDetailPage from './pages/BookDetailPage'
 import WordDetailPage from './pages/WordDetailPage'
@@ -18,7 +20,8 @@ type Page =
   | { type: 'quiz'; book: WordBook; words: Word[] }
 
 function App() {
-  const store = useStore()
+  const { user, loading: authLoading, signOut } = useAuth()
+  const store = useStore(user?.id ?? null)
   const [tab, setTab] = useState<Tab>('books')
   const [page, setPage] = useState<Page>({ type: 'tab' })
   const [tabBarHidden, setTabBarHidden] = useState(false)
@@ -47,6 +50,29 @@ function App() {
 
   // Reset scroll hide when switching tabs
   useEffect(() => { setTabBarHidden(false) }, [tab])
+
+  // Auth loading
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>
+        加载中...
+      </div>
+    )
+  }
+
+  // Not logged in
+  if (!user) {
+    return <AuthPage />
+  }
+
+  // Logged in - store not yet hydrated from Supabase
+  if (!store.hydrated) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-secondary)' }}>
+        同步数据中...
+      </div>
+    )
+  }
 
   if (page.type === 'bookDetail') {
     const reviewWords = store.wordsToReview(page.book)
@@ -143,6 +169,10 @@ function App() {
         <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>
           <span className="tab-icon">&#128202;</span>
           <span>统计</span>
+        </button>
+        <button onClick={signOut} style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '8px 0 6px' }}>
+          <span className="tab-icon">&#128682;</span>
+          <span>退出</span>
         </button>
       </nav>
     </>

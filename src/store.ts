@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { WordBook, Word, LearningRecord, BookStats } from './types'
 import { onCorrect, onWrong } from './utils'
+import { supabase } from './lib/supabase'
+import { migrateLocalStorageToSupabase } from './migration'
 
 const BOOKS_KEY = 'wordBooks_v1'
 const RECORDS_KEY = 'learningRecords_v1'
@@ -25,12 +27,16 @@ export interface StoreState {
   learningRecords: Record<string, LearningRecord>
 }
 
-export function useStore() {
+export function useStore(userId: string | null = null) {
   const [wordBooks, setWordBooks] = useState<WordBook[]>(() => load(BOOKS_KEY, []))
   const [learningRecords, setLearningRecords] = useState<Record<string, LearningRecord>>(() => load(RECORDS_KEY, {}))
   const [dailyLimit, setDailyLimitState] = useState<number>(() => load(DAILY_LIMIT_KEY, 20))
   const [darkMode, setDarkModeState] = useState<boolean>(() => load(DARK_MODE_KEY, false))
+  const [hydrated, setHydrated] = useState(!userId) // if no userId, start hydrated (localStorage mode)
+  const userIdRef = useRef(userId)
+  userIdRef.current = userId
 
+  // localStorage 持久化（始终保留作为离线缓存）
   useEffect(() => { save(BOOKS_KEY, wordBooks) }, [wordBooks])
   useEffect(() => { save(RECORDS_KEY, learningRecords) }, [learningRecords])
   useEffect(() => { save(DAILY_LIMIT_KEY, dailyLimit) }, [dailyLimit])
@@ -41,29 +47,142 @@ export function useStore() {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
 
+  // 从 Supabase 加载数据
+  useEffect(() => {
+    if (!userId) {
+      setHydrated(true)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadFromSupabase() {
+      // 检查是否需要迁移
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('migrated_from_local, daily_limit, dark_mode')
+        .eq('user_id', userId!)
+        .maybeSingle()
+
+      if (!settings?.migrated_from_local) {
+        await migrateLocalStorageToSupabase(userId!)
+      }
+
+      if (cancelled) return
+
+      // 加载词书
+      const { data: books } = await supabase
+        .from('word_books')
+        .select('book_id, name, words, created_at')
+        .eq('user_id', userId!)
+        .order('created_at', { ascending: true })
+
+      if (cancelled) return
+
+      if (books && books.length > 0) {
+        const mapped: WordBook[] = books.map((b: any) => ({
+          id: b.book_id,
+          bookId: b.book_id,
+          name: b.name,
+          words: b.words as Word[],
+          createdAt: b.created_at,
+        }))
+        setWordBooks(mapped)
+      }
+
+      // 加载学习记录
+      const { data: records } = await supabase
+        .from('learning_records')
+        .select('*')
+        .eq('user_id', userId!)
+
+      if (cancelled) return
+
+      if (records && records.length > 0) {
+        const mapped: Record<string, LearningRecord> = {}
+        for (const r of records) {
+          const key = `${r.book_id}_${r.word_id}`
+          mapped[key] = {
+            wordId: r.word_id,
+            bookId: r.book_id,
+            status: r.status,
+            reviewCount: r.review_count,
+            correctCount: r.correct_count,
+            consecutiveCorrect: r.consecutive_correct,
+            easeFactor: r.ease_factor,
+            intervalDays: r.interval_days,
+            lastReviewedAt: r.last_reviewed_at || undefined,
+            nextReviewAt: r.next_review_at || undefined,
+          }
+        }
+        setLearningRecords(mapped)
+      }
+
+      // 加载设置
+      if (settings) {
+        setDailyLimitState(settings.daily_limit)
+        setDarkModeState(settings.dark_mode)
+      }
+
+      if (!cancelled) setHydrated(true)
+    }
+
+    setHydrated(false)
+    loadFromSupabase()
+    return () => { cancelled = true }
+  }, [userId])
+
   const toggleDarkMode = useCallback(() => {
-    setDarkModeState((prev) => !prev)
+    setDarkModeState((prev) => {
+      const next = !prev
+      if (userIdRef.current) {
+        supabase.from('user_settings').upsert({
+          user_id: userIdRef.current,
+          dark_mode: next,
+        }, { onConflict: 'user_id' }).then()
+      }
+      return next
+    })
   }, [])
 
   const setDailyLimit = useCallback((limit: number) => {
-    setDailyLimitState(Math.max(1, Math.min(200, limit)))
+    const clamped = Math.max(1, Math.min(200, limit))
+    setDailyLimitState(clamped)
+    if (userIdRef.current) {
+      supabase.from('user_settings').upsert({
+        user_id: userIdRef.current,
+        daily_limit: clamped,
+      }, { onConflict: 'user_id' }).then()
+    }
   }, [])
 
   const addWordBook = useCallback((book: WordBook) => {
     setWordBooks((prev) => {
-      // 去重：如果 bookId 已存在，合并新单词
       const existing = prev.find((b) => b.bookId === book.bookId)
+      let next: WordBook[]
       if (existing) {
         const existingWordIds = new Set(existing.words.map((w) => w.wordId))
         const newWords = book.words.filter((w) => !existingWordIds.has(w.wordId))
         if (newWords.length === 0) return prev
-        return prev.map((b) =>
+        next = prev.map((b) =>
           b.bookId === book.bookId
             ? { ...b, words: [...b.words, ...newWords] }
             : b
         )
+      } else {
+        next = [...prev, book]
       }
-      return [...prev, book]
+      // 写入 Supabase
+      if (userIdRef.current) {
+        const target = next.find((b) => b.bookId === book.bookId)!
+        supabase.from('word_books').upsert({
+          user_id: userIdRef.current,
+          book_id: target.bookId,
+          name: target.name,
+          words: target.words,
+        }, { onConflict: 'user_id,book_id' }).then()
+      }
+      return next
     })
   }, [])
 
@@ -76,9 +195,16 @@ export function useStore() {
       }
       return next
     })
+    if (userIdRef.current) {
+      supabase.from('word_books').delete()
+        .eq('user_id', userIdRef.current)
+        .eq('book_id', book.bookId).then()
+      supabase.from('learning_records').delete()
+        .eq('user_id', userIdRef.current)
+        .eq('book_id', book.bookId).then()
+    }
   }, [])
 
-  // 重置单本书的学习进度
   const resetBookProgress = useCallback((book: WordBook) => {
     setLearningRecords((prev) => {
       const next = { ...prev }
@@ -87,9 +213,13 @@ export function useStore() {
       }
       return next
     })
+    if (userIdRef.current) {
+      supabase.from('learning_records').delete()
+        .eq('user_id', userIdRef.current)
+        .eq('book_id', book.bookId).then()
+    }
   }, [])
 
-  // 重置单个单词的学习进度
   const resetWordProgress = useCallback((book: WordBook, word: Word) => {
     const key = `${book.bookId}_${word.wordId}`
     setLearningRecords((prev) => {
@@ -97,6 +227,12 @@ export function useStore() {
       delete next[key]
       return next
     })
+    if (userIdRef.current) {
+      supabase.from('learning_records').delete()
+        .eq('user_id', userIdRef.current)
+        .eq('book_id', book.bookId)
+        .eq('word_id', word.wordId).then()
+    }
   }, [])
 
   const recordKey = useCallback((book: WordBook, word: Word) => {
@@ -138,6 +274,21 @@ export function useStore() {
       nextReviewAt: srs.nextReviewAt,
     }
     setLearningRecords((prev) => ({ ...prev, [key]: updated }))
+    if (userIdRef.current) {
+      supabase.from('learning_records').upsert({
+        user_id: userIdRef.current,
+        book_id: updated.bookId,
+        word_id: updated.wordId,
+        status: updated.status,
+        review_count: updated.reviewCount,
+        correct_count: updated.correctCount,
+        consecutive_correct: updated.consecutiveCorrect,
+        ease_factor: updated.easeFactor,
+        interval_days: updated.intervalDays,
+        last_reviewed_at: updated.lastReviewedAt || null,
+        next_review_at: updated.nextReviewAt || null,
+      }, { onConflict: 'user_id,book_id,word_id' }).then()
+    }
   }, [recordKey, record])
 
   const markUnknown = useCallback((book: WordBook, word: Word) => {
@@ -160,6 +311,21 @@ export function useStore() {
       nextReviewAt: srs.nextReviewAt,
     }
     setLearningRecords((prev) => ({ ...prev, [key]: updated }))
+    if (userIdRef.current) {
+      supabase.from('learning_records').upsert({
+        user_id: userIdRef.current,
+        book_id: updated.bookId,
+        word_id: updated.wordId,
+        status: updated.status,
+        review_count: updated.reviewCount,
+        correct_count: updated.correctCount,
+        consecutive_correct: updated.consecutiveCorrect,
+        ease_factor: updated.easeFactor,
+        interval_days: updated.intervalDays,
+        last_reviewed_at: updated.lastReviewedAt || null,
+        next_review_at: updated.nextReviewAt || null,
+      }, { onConflict: 'user_id,book_id,word_id' }).then()
+    }
   }, [recordKey, record])
 
   const stats = useCallback((book: WordBook): BookStats => {
@@ -208,7 +374,6 @@ export function useStore() {
     return result
   }, [learningRecords, recordKey, dailyLimit])
 
-  // 获取今日已学习的单词
   const getTodayWords = useCallback((): { book: WordBook; word: Word; record: LearningRecord }[] => {
     const today = new Date().toISOString().slice(0, 10)
     const result: { book: WordBook; word: Word; record: LearningRecord }[] = []
@@ -224,7 +389,6 @@ export function useStore() {
     return result
   }, [wordBooks, learningRecords])
 
-  // 获取某本书中指定状态的单词
   const getWordsByStatus = useCallback((book: WordBook, status: 'new' | 'learning' | 'reviewing' | 'mastered'): Word[] => {
     return book.words.filter((word) => {
       const key = `${book.bookId}_${word.wordId}`
@@ -234,7 +398,6 @@ export function useStore() {
     })
   }, [learningRecords])
 
-  // 全局搜索单词
   const searchAllWords = useCallback((query: string): { book: WordBook; word: Word }[] => {
     if (!query.trim()) return []
     const q = query.toLowerCase()
@@ -254,7 +417,6 @@ export function useStore() {
     return { reviewed: todayWords.length }
   }, [getTodayWords])
 
-  // 导出全部数据
   const exportData = useCallback(() => {
     const data = {
       version: '1.1',
@@ -272,7 +434,6 @@ export function useStore() {
     URL.revokeObjectURL(url)
   }, [wordBooks, learningRecords, dailyLimit])
 
-  // 导入备份数据
   const importData = useCallback((json: string): string => {
     try {
       const data = JSON.parse(json)
@@ -282,6 +443,36 @@ export function useStore() {
       setWordBooks(data.wordBooks)
       setLearningRecords(data.learningRecords)
       if (data.dailyLimit) setDailyLimitState(data.dailyLimit)
+
+      // 同步到 Supabase
+      if (userIdRef.current) {
+        const uid = userIdRef.current
+        // 词书
+        for (const book of data.wordBooks) {
+          supabase.from('word_books').upsert({
+            user_id: uid,
+            book_id: book.bookId,
+            name: book.name,
+            words: book.words,
+          }, { onConflict: 'user_id,book_id' }).then()
+        }
+        // 学习记录
+        const entries = Object.entries(data.learningRecords)
+        const batch = entries.map(([, rec]: [string, any]) => ({
+          user_id: uid,
+          book_id: rec.bookId,
+          word_id: rec.wordId,
+          status: rec.status,
+          review_count: rec.reviewCount,
+          correct_count: rec.correctCount,
+          consecutive_correct: rec.consecutiveCorrect,
+          ease_factor: rec.easeFactor,
+          interval_days: rec.intervalDays,
+          last_reviewed_at: rec.lastReviewedAt || null,
+          next_review_at: rec.nextReviewAt || null,
+        }))
+        supabase.from('learning_records').upsert(batch, { onConflict: 'user_id,book_id,word_id' }).then()
+      }
       return ''
     } catch (e) {
       return '解析备份文件失败: ' + (e as Error).message
@@ -293,6 +484,7 @@ export function useStore() {
     learningRecords,
     dailyLimit,
     darkMode,
+    hydrated,
     addWordBook,
     deleteWordBook,
     setDailyLimit,
