@@ -19,7 +19,7 @@ interface QuizItem {
 
 const LABELS = ['A', 'B', 'C', 'D']
 
-function buildQuizItems(words: Word[]): QuizItem[] {
+function buildQuizItems(words: Word[], ordered: boolean): QuizItem[] {
   const items: QuizItem[] = []
 
   for (const word of words) {
@@ -53,17 +53,18 @@ function buildQuizItems(words: Word[]): QuizItem[] {
     }
   }
 
-  return items.sort(() => Math.random() - 0.5)
+  return ordered ? items : items.sort(() => Math.random() - 0.5)
 }
 
 export default function QuizStudyPage({ book, words, store, onBack }: Props) {
-  const quizItems = useMemo(() => buildQuizItems(words), [words])
+  const [ordered, setOrdered] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [sessionCorrect, setSessionCorrect] = useState(0)
   const [finished, setFinished] = useState(false)
 
+  const quizItems = useMemo(() => buildQuizItems(words, ordered), [words, ordered])
   const item = currentIndex < quizItems.length ? quizItems[currentIndex] : null
 
   const handleChoice = (index: number) => {
@@ -133,11 +134,13 @@ export default function QuizStudyPage({ book, words, store, onBack }: Props) {
       <div className={styles.topBar}>
         <button onClick={onBack}>&#8592; 返回</button>
         <span>选择题测试</span>
-        <span />
+        <button onClick={() => setOrdered(!ordered)} style={{ fontSize: 12, color: 'var(--accent)' }}>
+          {ordered ? '&#8593;&#8595; 顺序' : '&#10051; 乱序'}
+        </button>
       </div>
 
       <div className={styles.progressInfo}>
-        <span>{currentIndex} / {quizItems.length}</span>
+        <span>{currentIndex + 1} / {quizItems.length}</span>
         <span style={{ color: 'var(--green)', fontWeight: 600 }}>&#10003; {sessionCorrect}</span>
       </div>
       <div className="progress-bar" style={{ marginBottom: 20 }}>

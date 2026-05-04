@@ -5,40 +5,19 @@ import { onCorrect, onWrong } from './utils'
 const BOOKS_KEY = 'wordBooks_v1'
 const RECORDS_KEY = 'learningRecords_v1'
 const DAILY_LIMIT_KEY = 'dailyLimit_v1'
+const DARK_MODE_KEY = 'darkMode_v1'
 
-function loadBooks(): WordBook[] {
+function load<T>(key: string, fallback: T): T {
   try {
-    const data = localStorage.getItem(BOOKS_KEY)
-    return data ? JSON.parse(data) : []
+    const data = localStorage.getItem(key)
+    return data ? JSON.parse(data) : fallback
   } catch {
-    return []
+    return fallback
   }
 }
 
-function loadRecords(): Record<string, LearningRecord> {
-  try {
-    const data = localStorage.getItem(RECORDS_KEY)
-    return data ? JSON.parse(data) : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveBooks(books: WordBook[]) {
-  localStorage.setItem(BOOKS_KEY, JSON.stringify(books))
-}
-
-function saveRecords(records: Record<string, LearningRecord>) {
-  localStorage.setItem(RECORDS_KEY, JSON.stringify(records))
-}
-
-function loadDailyLimit(): number {
-  const data = localStorage.getItem(DAILY_LIMIT_KEY)
-  return data ? Number(data) : 20
-}
-
-function saveDailyLimit(limit: number) {
-  localStorage.setItem(DAILY_LIMIT_KEY, String(limit))
+function save(key: string, value: unknown) {
+  localStorage.setItem(key, JSON.stringify(value))
 }
 
 export interface StoreState {
@@ -47,20 +26,45 @@ export interface StoreState {
 }
 
 export function useStore() {
-  const [wordBooks, setWordBooks] = useState<WordBook[]>(loadBooks)
-  const [learningRecords, setLearningRecords] = useState<Record<string, LearningRecord>>(loadRecords)
-  const [dailyLimit, setDailyLimitState] = useState<number>(loadDailyLimit)
+  const [wordBooks, setWordBooks] = useState<WordBook[]>(() => load(BOOKS_KEY, []))
+  const [learningRecords, setLearningRecords] = useState<Record<string, LearningRecord>>(() => load(RECORDS_KEY, {}))
+  const [dailyLimit, setDailyLimitState] = useState<number>(() => load(DAILY_LIMIT_KEY, 20))
+  const [darkMode, setDarkModeState] = useState<boolean>(() => load(DARK_MODE_KEY, false))
 
-  useEffect(() => { saveBooks(wordBooks) }, [wordBooks])
-  useEffect(() => { saveRecords(learningRecords) }, [learningRecords])
-  useEffect(() => { saveDailyLimit(dailyLimit) }, [dailyLimit])
+  useEffect(() => { save(BOOKS_KEY, wordBooks) }, [wordBooks])
+  useEffect(() => { save(RECORDS_KEY, learningRecords) }, [learningRecords])
+  useEffect(() => { save(DAILY_LIMIT_KEY, dailyLimit) }, [dailyLimit])
+  useEffect(() => { save(DARK_MODE_KEY, darkMode) }, [darkMode])
+
+  // 暗色模式
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+  }, [darkMode])
+
+  const toggleDarkMode = useCallback(() => {
+    setDarkModeState((prev) => !prev)
+  }, [])
 
   const setDailyLimit = useCallback((limit: number) => {
-    setDailyLimitState(Math.max(1, Math.min(100, limit)))
+    setDailyLimitState(Math.max(1, Math.min(200, limit)))
   }, [])
 
   const addWordBook = useCallback((book: WordBook) => {
-    setWordBooks((prev) => [...prev, book])
+    setWordBooks((prev) => {
+      // 去重：如果 bookId 已存在，合并新单词
+      const existing = prev.find((b) => b.bookId === book.bookId)
+      if (existing) {
+        const existingWordIds = new Set(existing.words.map((w) => w.wordId))
+        const newWords = book.words.filter((w) => !existingWordIds.has(w.wordId))
+        if (newWords.length === 0) return prev
+        return prev.map((b) =>
+          b.bookId === book.bookId
+            ? { ...b, words: [...b.words, ...newWords] }
+            : b
+        )
+      }
+      return [...prev, book]
+    })
   }, [])
 
   const deleteWordBook = useCallback((book: WordBook) => {
@@ -68,9 +72,29 @@ export function useStore() {
     setLearningRecords((prev) => {
       const next = { ...prev }
       for (const word of book.words) {
-        const key = `${book.bookId}_${word.wordId}`
-        delete next[key]
+        delete next[`${book.bookId}_${word.wordId}`]
       }
+      return next
+    })
+  }, [])
+
+  // 重置单本书的学习进度
+  const resetBookProgress = useCallback((book: WordBook) => {
+    setLearningRecords((prev) => {
+      const next = { ...prev }
+      for (const word of book.words) {
+        delete next[`${book.bookId}_${word.wordId}`]
+      }
+      return next
+    })
+  }, [])
+
+  // 重置单个单词的学习进度
+  const resetWordProgress = useCallback((book: WordBook, word: Word) => {
+    const key = `${book.bookId}_${word.wordId}`
+    setLearningRecords((prev) => {
+      const next = { ...prev }
+      delete next[key]
       return next
     })
   }, [])
@@ -210,18 +234,69 @@ export function useStore() {
     })
   }, [learningRecords])
 
+  // 全局搜索单词
+  const searchAllWords = useCallback((query: string): { book: WordBook; word: Word }[] => {
+    if (!query.trim()) return []
+    const q = query.toLowerCase()
+    const result: { book: WordBook; word: Word }[] = []
+    for (const book of wordBooks) {
+      for (const word of book.words) {
+        if (word.headWord.toLowerCase().includes(q)) {
+          result.push({ book, word })
+        }
+      }
+    }
+    return result.slice(0, 30)
+  }, [wordBooks])
+
   const todayStats = useCallback(() => {
     const todayWords = getTodayWords()
     return { reviewed: todayWords.length }
   }, [getTodayWords])
 
+  // 导出全部数据
+  const exportData = useCallback(() => {
+    const data = {
+      version: '1.1',
+      exportedAt: new Date().toISOString(),
+      wordBooks,
+      learningRecords,
+      dailyLimit,
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `wordbook-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [wordBooks, learningRecords, dailyLimit])
+
+  // 导入备份数据
+  const importData = useCallback((json: string): string => {
+    try {
+      const data = JSON.parse(json)
+      if (!data.wordBooks || !data.learningRecords) {
+        return '备份文件格式不正确'
+      }
+      setWordBooks(data.wordBooks)
+      setLearningRecords(data.learningRecords)
+      if (data.dailyLimit) setDailyLimitState(data.dailyLimit)
+      return ''
+    } catch (e) {
+      return '解析备份文件失败: ' + (e as Error).message
+    }
+  }, [])
+
   return {
     wordBooks,
     learningRecords,
     dailyLimit,
+    darkMode,
     addWordBook,
     deleteWordBook,
     setDailyLimit,
+    toggleDarkMode,
     recordKey,
     record,
     markKnown,
@@ -230,6 +305,11 @@ export function useStore() {
     wordsToReview,
     getTodayWords,
     getWordsByStatus,
+    searchAllWords,
     todayStats,
+    resetBookProgress,
+    resetWordProgress,
+    exportData,
+    importData,
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useStore } from './store'
 import type { WordBook, Word } from './types'
 import BookShelfPage from './pages/BookShelfPage'
@@ -21,12 +21,32 @@ function App() {
   const store = useStore()
   const [tab, setTab] = useState<Tab>('books')
   const [page, setPage] = useState<Page>({ type: 'tab' })
+  const [tabBarHidden, setTabBarHidden] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const goBack = () => setPage({ type: 'tab' })
 
   const openWordDetail = useCallback((word: Word, book: WordBook, words: Word[]) => {
     setPage({ type: 'wordDetail', word, book, words })
   }, [])
+
+  // Hide tab bar on scroll down, show on scroll up
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    let lastY = 0
+    const onScroll = () => {
+      const y = el.scrollTop
+      if (y > lastY && y > 60) setTabBarHidden(true)
+      else if (y < lastY - 10) setTabBarHidden(false)
+      lastY = y
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [tab])
+
+  // Reset scroll hide when switching tabs
+  useEffect(() => { setTabBarHidden(false) }, [tab])
 
   if (page.type === 'bookDetail') {
     const reviewWords = store.wordsToReview(page.book)
@@ -89,11 +109,12 @@ function App() {
 
   return (
     <>
-      <div className="tab-content">
+      <div className="tab-content" ref={scrollRef}>
         {tab === 'books' && (
           <BookShelfPage
             store={store}
             onBookClick={(book) => setPage({ type: 'bookDetail', book })}
+            onWordClick={(word, book) => openWordDetail(word, book, book.words)}
           />
         )}
         {tab === 'today' && (
@@ -110,7 +131,7 @@ function App() {
           />
         )}
       </div>
-      <nav className="tab-bar">
+      <nav className={`tab-bar${tabBarHidden ? ' tab-bar-hidden' : ''}`}>
         <button className={tab === 'books' ? 'active' : ''} onClick={() => setTab('books')}>
           <span className="tab-icon">&#128218;</span>
           <span>词书</span>
