@@ -4,7 +4,7 @@ import styles from './StatsPage.module.css'
 
 interface Props {
   store: ReturnType<typeof import('../store').useStore>
-  onWordClick: (word: Word, book: WordBook) => void
+  onWordClick: (word: Word, book: WordBook, words: Word[]) => void
 }
 
 type ModalData = { book: WordBook; status: LearningStatus; label: string; color: string } | null
@@ -60,11 +60,14 @@ export default function StatsPage({ store, onWordClick }: Props) {
             </div>
             {todayWords.length > 0 && (
               <div className={styles.todayWords}>
-                {todayWords.slice(0, 10).map(({ word, book, record }, i) => (
-                  <button key={word.id + i} className={`badge ${statusInfo[record.status as LearningStatus]?.badge ?? 'badge-accent'}`} onClick={() => onWordClick(word, book)}>
-                    {word.headWord}
-                  </button>
-                ))}
+                {todayWords.slice(0, 10).map(({ word, book, record }, i) => {
+                  const allTodayWords = todayWords.map(tw => tw.word)
+                  return (
+                    <button key={word.id + i} className={`badge ${statusInfo[record.status as LearningStatus]?.badge ?? 'badge-accent'}`} onClick={() => onWordClick(word, book, allTodayWords)}>
+                      {word.headWord}
+                    </button>
+                  )
+                })}
                 {todayWords.length > 10 && <span className={styles.todayMore}>+{todayWords.length - 10}</span>}
               </div>
             )}
@@ -118,7 +121,7 @@ export default function StatsPage({ store, onWordClick }: Props) {
               {modalWords.map((word) => {
                 const trans = word.translations[0]
                 return (
-                  <button key={word.id} className={styles.modalWord} onClick={() => { setModal(null); onWordClick(word, modal.book) }}>
+                  <button key={word.id} className={styles.modalWord} onClick={() => { setModal(null); onWordClick(word, modal.book, modalWords) }}>
                     <div>
                       <span className={styles.modalWordName}>{word.headWord}</span>
                       {trans && <span className={styles.modalWordTrans}>{trans.pos ? `${trans.pos} ` : ''}{trans.tranCn}</span>}

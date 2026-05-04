@@ -107,7 +107,7 @@ let currentAudio: HTMLAudioElement | null = null
 function stopAudio() {
   if (currentAudio) {
     currentAudio.pause()
-    currentAudio.removeAttribute('src')
+    currentAudio.src = ''
     currentAudio.load()
     currentAudio = null
   }
@@ -116,22 +116,33 @@ function stopAudio() {
 export function playWordAudio(word: string, accent: 'uk' | 'us' = 'us'): void {
   stopAudio()
   const type = accent === 'uk' ? 1 : 2
-  const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${type}`
-  currentAudio = new Audio(url)
+  // 每次加时间戳防止浏览器缓存导致无法重播
+  const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${type}&v=${Date.now()}`
+  currentAudio = new Audio()
+  currentAudio.src = url
   currentAudio.volume = 1
-  currentAudio.play().catch((err) => {
-    console.error('播放失败:', err)
-  })
+  currentAudio.load()
+  const playPromise = currentAudio.play()
+  if (playPromise) {
+    playPromise.catch((err) => {
+      console.error('播放失败:', word, err)
+    })
+  }
 }
 
 export function playSpeech(speechParam: string): void {
   stopAudio()
-  const url = `https://dict.youdao.com/dictvoice?${speechParam}`
-  currentAudio = new Audio(url)
+  const url = `https://dict.youdao.com/dictvoice?${speechParam}&v=${Date.now()}`
+  currentAudio = new Audio()
+  currentAudio.src = url
   currentAudio.volume = 1
-  currentAudio.play().catch((err) => {
-    console.error('播放失败:', err)
-  })
+  currentAudio.load()
+  const playPromise = currentAudio.play()
+  if (playPromise) {
+    playPromise.catch((err) => {
+      console.error('播放失败:', speechParam, err)
+    })
+  }
 }
 
 // ===== 基于 SM-2 的间隔重复算法 =====

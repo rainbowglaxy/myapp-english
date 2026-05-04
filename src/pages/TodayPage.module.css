@@ -128,11 +128,37 @@
   margin-bottom: 20px;
 }
 
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
 .sectionTitle {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
   margin-bottom: 10px;
+}
+
+.orderToggle {
+  display: flex;
+  gap: 6px;
+}
+
+.orderBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 99px;
+  background: var(--bg);
+  color: var(--text-secondary);
+}
+
+.orderActive {
+  background: var(--accent);
+  color: white;
 }
 
 .todayWordList {

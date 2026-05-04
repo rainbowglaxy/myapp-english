@@ -1,16 +1,26 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { WordBook, Word } from '../types'
 import styles from './TodayPage.module.css'
 
 interface Props {
   store: ReturnType<typeof import('../store').useStore>
   onStudy: (book: WordBook, words: Word[]) => void
-  onWordClick: (word: Word, book: WordBook) => void
+  onWordClick: (word: Word, book: WordBook, words: Word[]) => void
+}
+
+function shuffleArr<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 export default function TodayPage({ store, onStudy, onWordClick }: Props) {
   const [editingLimit, setEditingLimit] = useState(false)
   const [limitInput, setLimitInput] = useState(String(store.dailyLimit))
+  const [shuffle, setShuffle] = useState(false)
 
   const dueBooks = store.wordBooks
     .map((book) => ({ book, dueWords: store.wordsToReview(book) }))
@@ -19,6 +29,10 @@ export default function TodayPage({ store, onStudy, onWordClick }: Props) {
   const totalDue = dueBooks.reduce((sum, d) => sum + d.dueWords.length, 0)
   const totalMastered = store.wordBooks.reduce((sum, b) => sum + store.stats(b).mastered, 0)
   const todayWords = store.getTodayWords()
+
+  const getStudyWords = useCallback((words: Word[]) => {
+    return shuffle ? shuffleArr(words) : words
+  }, [shuffle])
 
   const handleSaveLimit = () => {
     const n = parseInt(limitInput, 10)
@@ -84,49 +98,67 @@ export default function TodayPage({ store, onStudy, onWordClick }: Props) {
         <div className={styles.section}>
           <div className={styles.sectionTitle}>今日已学单词</div>
           <div className={styles.todayWordList}>
-            {todayWords.map(({ word, book, record }, i) => (
-              <button key={word.id + i} className={styles.todayWordItem} onClick={() => onWordClick(word, book)}>
-                <div>
-                  <span className={styles.todayWordName}>{word.headWord}</span>
-                  {word.translations[0] && (
-                    <span className={styles.todayWordTrans}>
-                      {word.translations[0].pos ? `${word.translations[0].pos} ` : ''}{word.translations[0].tranCn}
-                    </span>
-                  )}
-                </div>
-                {statusBadge(record.status)}
-              </button>
-            ))}
+            {todayWords.map(({ word, book, record }, i) => {
+              // 今日已学单词作为可导航列表
+              const allTodayWords = todayWords.map(tw => tw.word)
+              return (
+                <button key={word.id + i} className={styles.todayWordItem}
+                  onClick={() => onWordClick(word, book, allTodayWords)}>
+                  <div>
+                    <span className={styles.todayWordName}>{word.headWord}</span>
+                    {word.translations[0] && (
+                      <span className={styles.todayWordTrans}>
+                        {word.translations[0].pos ? `${word.translations[0].pos} ` : ''}{word.translations[0].tranCn}
+                      </span>
+                    )}
+                  </div>
+                  {statusBadge(record.status)}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
 
       {dueBooks.length > 0 && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>待学习</div>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>待学习</div>
+            <div className={styles.orderToggle}>
+              <button className={`${styles.orderBtn} ${!shuffle ? styles.orderActive : ''}`} onClick={() => setShuffle(false)}>
+                &#8593;&#8595; 顺序
+              </button>
+              <button className={`${styles.orderBtn} ${shuffle ? styles.orderActive : ''}`} onClick={() => setShuffle(true)}>
+                &#10051; 乱序
+              </button>
+            </div>
+          </div>
           <div className={styles.cardList}>
-            {dueBooks.map(({ book, dueWords }) => (
-              <div key={book.id} className="card">
-                <div className={styles.cardHeader}>
-                  <div>
-                    <div className={styles.bookName}>{book.name}</div>
-                    <div className={styles.dueCount}>{dueWords.length} 个单词待复习</div>
+            {dueBooks.map(({ book, dueWords }) => {
+              const studyWords = getStudyWords(dueWords)
+              return (
+                <div key={book.id} className="card">
+                  <div className={styles.cardHeader}>
+                    <div>
+                      <div className={styles.bookName}>{book.name}</div>
+                      <div className={styles.dueCount}>{dueWords.length} 个单词待复习</div>
+                    </div>
+                    <span style={{ fontSize: 20, color: 'var(--accent)', opacity: 0.5 }}>&#9654;</span>
                   </div>
-                  <span style={{ fontSize: 20, color: 'var(--accent)', opacity: 0.5 }}>&#9654;</span>
+                  <div className={styles.wordChips}>
+                    {dueWords.slice(0, 5).map((w) => (
+                      <span key={w.id} className="badge badge-accent">{w.headWord}</span>
+                    ))}
+                    {dueWords.length > 5 && (
+                      <span className={styles.moreCount}>+{dueWords.length - 5}</span>
+                    )}
+                  </div>
+                  <button className="btn-primary" onClick={() => onStudy(book, studyWords)} style={{ width: '100%', marginTop: 12 }}>
+                    开始学习
+                  </button>
                 </div>
-                <div className={styles.wordChips}>
-                  {dueWords.slice(0, 5).map((w) => (
-                    <span key={w.id} className="badge badge-accent">{w.headWord}</span>
-                  ))}
-                  {dueWords.length > 5 && (
-                    <span className={styles.moreCount}>+{dueWords.length - 5}</span>
-                  )}
-                </div>
-                <button className="btn-primary" onClick={() => onStudy(book, dueWords)} style={{ width: '100%', marginTop: 12 }}>
-                  开始学习
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

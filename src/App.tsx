@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useStore } from './store'
 import type { WordBook, Word } from './types'
 import BookShelfPage from './pages/BookShelfPage'
@@ -13,9 +13,18 @@ type Tab = 'books' | 'today' | 'stats'
 type Page =
   | { type: 'tab' }
   | { type: 'bookDetail'; book: WordBook }
-  | { type: 'wordDetail'; word: Word; book: WordBook; words?: Word[] }
+  | { type: 'wordDetail'; word: Word; book: WordBook; words: Word[] }
   | { type: 'flashcard'; book: WordBook; words: Word[] }
   | { type: 'quiz'; book: WordBook; words: Word[] }
+
+function shuffleArr<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
 
 function App() {
   const store = useStore()
@@ -24,29 +33,10 @@ function App() {
 
   const goBack = () => setPage({ type: 'tab' })
 
-  const openWordDetail = (word: Word, book: WordBook, words?: Word[]) => {
+  // 统一的单词详情打开函数，必须传入单词列表
+  const openWordDetail = useCallback((word: Word, book: WordBook, words: Word[]) => {
     setPage({ type: 'wordDetail', word, book, words })
-  }
-
-  const nextWord = page.type === 'wordDetail' && page.words
-    ? () => {
-        const idx = page.words!.indexOf(page.word)
-        if (idx >= 0 && idx + 1 < page.words!.length) {
-          setPage({ ...page, word: page.words![idx + 1] })
-        } else {
-          goBack()
-        }
-      }
-    : undefined
-
-  const prevWord = page.type === 'wordDetail' && page.words
-    ? () => {
-        const idx = page.words!.indexOf(page.word)
-        if (idx > 0) {
-          setPage({ ...page, word: page.words![idx - 1] })
-        }
-      }
-    : undefined
+  }, [])
 
   if (page.type === 'bookDetail') {
     const reviewWords = store.wordsToReview(page.book)
@@ -63,17 +53,29 @@ function App() {
   }
 
   if (page.type === 'wordDetail') {
+    const idx = page.words.indexOf(page.word)
+    const onNext = () => {
+      if (idx >= 0 && idx + 1 < page.words.length) {
+        setPage({ ...page, word: page.words[idx + 1] })
+      } else {
+        goBack()
+      }
+    }
+    const onPrev = () => {
+      if (idx > 0) {
+        setPage({ ...page, word: page.words[idx - 1] })
+      }
+    }
     return (
       <WordDetailPage
         word={page.word}
         book={page.book}
         store={store}
         onBack={goBack}
-        onNext={nextWord}
-        onPrev={prevWord}
-        hasNav={!!page.words}
-        currentIdx={page.words ? page.words.indexOf(page.word) + 1 : undefined}
-        totalWords={page.words?.length}
+        onNext={onNext}
+        onPrev={onPrev}
+        currentIdx={idx + 1}
+        totalWords={page.words.length}
       />
     )
   }
@@ -99,16 +101,13 @@ function App() {
           <TodayPage
             store={store}
             onStudy={(book, words) => setPage({ type: 'flashcard', book, words })}
-            onWordClick={(word, book) => {
-              const dueWords = store.wordsToReview(book)
-              openWordDetail(word, book, dueWords)
-            }}
+            onWordClick={(word, book, words) => openWordDetail(word, book, words)}
           />
         )}
         {tab === 'stats' && (
           <StatsPage
             store={store}
-            onWordClick={(word, book) => openWordDetail(word, book)}
+            onWordClick={(word, book, words) => openWordDetail(word, book, words)}
           />
         )}
       </div>
